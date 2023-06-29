@@ -3,16 +3,17 @@ package ui
 import (
 	"bufio"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/ivanvc/lt/internal/cmd"
 	"github.com/ivanvc/lt/internal/config"
 	"github.com/ivanvc/lt/internal/log"
 	"github.com/ivanvc/lt/internal/server"
@@ -27,26 +28,30 @@ type ui struct {
 	cfg    *config.Config
 	server *server.Server
 
-	spinner  spinner.Model
-	keymap   keymap
-	help     help.Model
-	viewport viewport.Model
-	ready    bool
-	addr     string
+	spinner   spinner.Model
+	keymap    keymap
+	help      help.Model
+	viewport  viewport.Model
+	textInput textinput.Model
+	ready     bool
+	addr      string
 
 	linesChan       chan string
 	logger          *log.Logger
 	viewportContent []string
+	scrollLock      bool
+	editingCommand  bool
+
+	manager *cmd.Manager
 }
 
 const maxLines = 1000
 
 // Returns a new UI
 func New(cfg *config.Config, logger *log.Logger, server *server.Server) *ui {
-
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
-	s.Style = styles.Spinner
+	s.Style = styles.FooterText
 
 	return &ui{
 		cfg:             cfg,
@@ -57,6 +62,8 @@ func New(cfg *config.Config, logger *log.Logger, server *server.Server) *ui {
 		linesChan:       make(chan string),
 		logger:          logger,
 		viewportContent: make([]string, maxLines),
+		manager:         cmd.New(logger),
+		textInput:       textinput.New(),
 	}
 }
 
@@ -64,6 +71,7 @@ func New(cfg *config.Config, logger *log.Logger, server *server.Server) *ui {
 func (ui ui) Init() tea.Cmd {
 	return tea.Batch(
 		ui.spinner.Tick,
+		textinput.Blink,
 		listenForLogs(ui.linesChan, ui.logger.Reader),
 		waitForLines(ui.linesChan),
 		startListener(ui.server, ui.logger),
@@ -72,51 +80,93 @@ func (ui ui) Init() tea.Cmd {
 
 // Update implements tea.Model.
 func (ui ui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var (
+		cmds []tea.Cmd
+		cmd  tea.Cmd
+	)
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, ui.keymap.quit):
-			return ui, tea.Quit
+		if ui.editingCommand {
+			switch {
+			case key.Matches(msg, ui.keymap.editingSave):
+				ui.editingCommand = false
+				ui.cfg.ExecProgram = strings.Split(ui.textInput.Value(), " ")
+				cmds = append(cmds, tea.Sequence(
+					stopCommand(ui.manager),
+					startCommand(ui.cfg, ui.manager, ui.linesChan),
+				))
+			case key.Matches(msg, ui.keymap.editingCancel):
+				ui.editingCommand = false
+			case msg.String() == "ctrl+c":
+				return ui, tea.Sequence(
+					tea.Batch(stopCommand(ui.manager), stopServer(ui.server)),
+					tea.Quit,
+				)
+			}
+		} else {
+			switch {
+			case key.Matches(msg, ui.keymap.quit):
+				return ui, tea.Sequence(
+					tea.Batch(stopCommand(ui.manager), stopServer(ui.server)),
+					tea.Quit,
+				)
+			case key.Matches(msg, ui.keymap.reload):
+				ui.logger.Print("Reloading")
+				cmds = append(cmds, tea.Sequence(
+					stopCommand(ui.manager),
+					startCommand(ui.cfg, ui.manager, ui.linesChan),
+				))
+			case key.Matches(msg, ui.keymap.editCommand):
+				ui.editingCommand = true
+				ui.textInput.SetValue(strings.Join(ui.cfg.ExecProgram, " "))
+				ui.textInput.Focus()
+				return ui, tea.Batch(cmds...)
+			case key.Matches(msg, ui.keymap.scrollLock):
+				ui.scrollLock = !ui.scrollLock
+			}
 		}
 	case tea.WindowSizeMsg:
-		verticalMarginHeight := 1 + lipgloss.Height(ui.helpView()) // header + helpView
+		verticalMarginHeight := lipgloss.Height(ui.footerView()) + lipgloss.Height(ui.helpView())
 		if !ui.ready {
 			ui.ready = true
+			ui.viewport.HighPerformanceRendering = true
 			ui.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
-			ui.viewport.YPosition = verticalMarginHeight
+			ui.viewport.YPosition = int(lipgloss.Top)
 			ui.viewport.Style = styles.Viewport
 		} else {
 			ui.viewport.Width = msg.Width
 			ui.viewport.Height = msg.Height - verticalMarginHeight
 		}
+		ui.textInput.Width = msg.Width - lipgloss.Width(logo) - 2
+		cmds = append(cmds, viewport.Sync(ui.viewport))
 	case spinner.TickMsg:
-		var cmd tea.Cmd
 		ui.spinner, cmd = ui.spinner.Update(msg)
-		return ui, cmd
+		cmds = append(cmds, cmd)
 	case newLineMsg:
 		ui.viewportContent = append(ui.viewportContent, string(msg))
 		if len(ui.viewportContent) > maxLines {
 			ui.viewportContent = ui.viewportContent[len(ui.viewportContent)-maxLines:]
 		}
-		scrollToBottom := ui.viewport.AtBottom()
 
 		ui.viewport.SetContent(strings.Join(ui.viewportContent, ""))
-		if scrollToBottom {
+		if !ui.scrollLock {
 			ui.viewport.GotoBottom()
-		} else {
-			ui.viewport.SetYOffset(ui.viewport.YOffset + 1)
 		}
 
-		return ui, waitForLines(ui.linesChan)
+		cmds = append(cmds, waitForLines(ui.linesChan))
 	case listenerReadyMsg:
 		ui.addr = string(msg)
-		cmds := tea.Batch(
+		cmds = append(cmds, tea.Batch(
 			startServer(ui.server, ui.logger),
-			spawnCommand(ui.cfg, ui.logger, ui.linesChan),
-		)
-		return ui, cmds
+			startCommand(ui.cfg, ui.manager, ui.linesChan),
+		))
 	}
-	return ui, nil
+
+	ui.viewport, cmd = ui.viewport.Update(msg)
+	ui.textInput, cmd = ui.textInput.Update(msg)
+
+	return ui, tea.Batch(append(cmds, cmd)...)
 }
 
 // View implements tea.Model.
@@ -125,24 +175,37 @@ func (ui ui) View() string {
 		return "Loading..."
 	}
 
-	return fmt.Sprintf("%s\n%s\n%s", ui.headerView(), ui.viewport.View(), ui.helpView())
+	return fmt.Sprintf("%s\n%s\n%s", ui.viewport.View(), ui.footerView(), ui.helpView())
 }
 
-func (ui ui) headerView() string {
+func (ui ui) footerView() string {
 	var s string
 	if len(ui.addr) == 0 {
 		s = fmt.Sprintf("%s Establishing connection...", ui.spinner.View())
-	} else {
+	} else if !ui.editingCommand {
 		s = fmt.Sprintf("🌐 %s", ui.addr)
+	} else {
+		s = ui.textInput.View()
 	}
-	return styles.Header.Render(s)
+	return styles.Footer.Render(lipgloss.JoinHorizontal(
+		lipgloss.Center, styles.Logo.Render(logo), styles.FooterText.Render(s),
+	))
 }
 
 func (ui ui) helpView() string {
-	return ui.help.ShortHelpView([]key.Binding{
-		ui.keymap.reload,
-		ui.keymap.quit,
-	})
+	if ui.editingCommand {
+		return styles.Help.Render(ui.help.ShortHelpView([]key.Binding{
+			ui.keymap.editingCancel,
+			ui.keymap.editingSave,
+		}))
+	} else {
+		return styles.Help.Render(ui.help.ShortHelpView([]key.Binding{
+			ui.keymap.reload,
+			ui.keymap.editCommand,
+			ui.keymap.scrollLock,
+			ui.keymap.quit,
+		}))
+	}
 }
 
 func waitForLines(sub chan string) tea.Cmd {
@@ -184,50 +247,23 @@ func startServer(server *server.Server, logger *log.Logger) tea.Cmd {
 	}
 }
 
-func spawnCommand(cfg *config.Config, logger *log.Logger, sub chan string) tea.Cmd {
+func startCommand(cfg *config.Config, mgr *cmd.Manager, sub chan string) tea.Cmd {
 	return func() tea.Msg {
-		if len(cfg.ExecProgram) == 0 {
-			return nil
-		}
-		logger.Info("Starting program", "program", cfg.ExecProgram[0], "args", cfg.ExecProgram[1:])
+		mgr.Run(cfg.ExecProgram, sub)
+		return nil
+	}
+}
 
-		cmd := exec.Command(cfg.ExecProgram[0], cfg.ExecProgram[1:]...)
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			logger.Error("Error piping stdout", "error", err)
-		}
-		reader := bufio.NewReader(stdout)
-		go func() {
-			for {
-				line, err := reader.ReadSlice('\n')
-				if err != nil {
-					logger.Error("Error reading stdout", "error", err)
-					return
-				}
-				sub <- string(line)
-			}
-		}()
+func stopCommand(mgr *cmd.Manager) tea.Cmd {
+	return func() tea.Msg {
+		mgr.Stop()
+		return nil
+	}
+}
 
-		stderr, err := cmd.StderrPipe()
-		er := bufio.NewReader(stderr)
-		if err != nil {
-			logger.Error("Error piping stderr", "error", err)
-		}
-
-		go func() {
-			for {
-				line, err := er.ReadSlice('\n')
-				if err != nil {
-					logger.Error("Error reading sterr", "error", err)
-					return
-				}
-				sub <- string(line)
-			}
-		}()
-		if err := cmd.Run(); err != nil {
-			logger.Error("Error executing program", "error", err)
-		}
-		logger.Info("Program exited", "error", cmd.Err)
+func stopServer(s *server.Server) tea.Cmd {
+	return func() tea.Msg {
+		s.Close()
 		return nil
 	}
 }
