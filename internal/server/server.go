@@ -3,8 +3,8 @@ package server
 import (
 	"net/http"
 
-	"github.com/ivanvc/lt/internal/config"
-	"github.com/ivanvc/lt/internal/log"
+	"github.com/ivanvc/tube/internal/config"
+	"github.com/ivanvc/tube/internal/log"
 	"github.com/localtunnel/go-localtunnel"
 )
 

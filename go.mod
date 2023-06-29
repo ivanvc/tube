@@ -1,4 +1,4 @@
-module github.com/ivanvc/lt
+module github.com/ivanvc/tube
 
 go 1.20
 

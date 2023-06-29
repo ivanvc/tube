@@ -13,11 +13,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ivanvc/lt/internal/cmd"
-	"github.com/ivanvc/lt/internal/config"
-	"github.com/ivanvc/lt/internal/log"
-	"github.com/ivanvc/lt/internal/server"
-	"github.com/ivanvc/lt/internal/ui/styles"
+	"github.com/ivanvc/tube/internal/cmd"
+	"github.com/ivanvc/tube/internal/config"
+	"github.com/ivanvc/tube/internal/log"
+	"github.com/ivanvc/tube/internal/server"
+	"github.com/ivanvc/tube/internal/ui/styles"
 )
 
 type newLineMsg string

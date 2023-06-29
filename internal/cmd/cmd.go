@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"syscall"
 
-	"github.com/ivanvc/lt/internal/log"
+	"github.com/ivanvc/tube/internal/log"
 )
 
 // Manager has the running program initialized by the tunnel.

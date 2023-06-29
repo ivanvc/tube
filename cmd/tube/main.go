@@ -4,10 +4,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 
-	"github.com/ivanvc/lt/internal/config"
-	intlog "github.com/ivanvc/lt/internal/log"
-	"github.com/ivanvc/lt/internal/server"
-	"github.com/ivanvc/lt/internal/ui"
+	"github.com/ivanvc/tube/internal/config"
+	intlog "github.com/ivanvc/tube/internal/log"
+	"github.com/ivanvc/tube/internal/server"
+	"github.com/ivanvc/tube/internal/ui"
 )
 
 func main() {
