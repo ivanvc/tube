@@ -5,7 +5,6 @@ import "github.com/charmbracelet/bubbles/key"
 type keymap struct {
 	reload      key.Binding
 	quit        key.Binding
-	scrollLock  key.Binding
 	editCommand key.Binding
 
 	editingSave   key.Binding
@@ -21,10 +20,6 @@ func newKeymap() keymap {
 		quit: key.NewBinding(
 			key.WithKeys("ctrl+c", "esc", "q"),
 			key.WithHelp("q/esc", "quit"),
-		),
-		scrollLock: key.NewBinding(
-			key.WithKeys("s"),
-			key.WithHelp("s", "toggle scroll lock"),
 		),
 		editCommand: key.NewBinding(
 			key.WithKeys("e"),

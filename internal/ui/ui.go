@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -28,18 +27,19 @@ type ui struct {
 	cfg    *config.Config
 	server *server.Server
 
-	spinner   spinner.Model
-	keymap    keymap
-	help      help.Model
-	viewport  viewport.Model
-	textInput textinput.Model
-	ready     bool
-	addr      string
+	width          int
+	viewportWidth  int
+	viewportHeight int
+	spinner        spinner.Model
+	keymap         keymap
+	help           help.Model
+	textInput      textinput.Model
+	ready          bool
+	addr           string
 
 	linesChan       chan string
 	logger          log.Logger
 	viewportContent []string
-	scrollLock      bool
 	editingCommand  bool
 
 	manager *cmd.Manager
@@ -61,7 +61,7 @@ func New(cfg *config.Config, logger log.Logger, server *server.Server) *ui {
 		help:            help.New(),
 		linesChan:       make(chan string),
 		logger:          logger,
-		viewportContent: make([]string, maxLines),
+		viewportContent: make([]string, 0, maxLines),
 		manager:         cmd.New(logger),
 		textInput:       textinput.New(),
 	}
@@ -94,7 +94,7 @@ func (ui ui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ui.cfg.ExecCommand = strings.Split(ui.textInput.Value(), " ")
 				cmds = append(cmds, tea.Sequence(
 					stopCommand(ui.manager),
-					startCommand(ui.cfg, ui.manager, ui.linesChan),
+					startCommand(ui.cfg, ui.manager),
 				))
 			case key.Matches(msg, ui.keymap.editingCancel):
 				ui.editingCommand = false
@@ -115,31 +115,25 @@ func (ui ui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ui.logger.Log().Info("Reloading command")
 				cmds = append(cmds, tea.Sequence(
 					stopCommand(ui.manager),
-					startCommand(ui.cfg, ui.manager, ui.linesChan),
+					startCommand(ui.cfg, ui.manager),
 				))
 			case key.Matches(msg, ui.keymap.editCommand):
 				ui.editingCommand = true
 				ui.textInput.SetValue(strings.Join(ui.cfg.ExecCommand, " "))
 				ui.textInput.Focus()
 				return ui, tea.Batch(cmds...)
-			case key.Matches(msg, ui.keymap.scrollLock):
-				ui.scrollLock = !ui.scrollLock
 			}
 		}
 	case tea.WindowSizeMsg:
-		verticalMarginHeight := lipgloss.Height(ui.footerView()) + lipgloss.Height(ui.helpView())
+		verticalMarginHeight := lipgloss.Height(ui.footerView()) + 1
+		const horizontalPadding = 2 * 2
+		ui.width = msg.Width
+		ui.viewportWidth = msg.Width - 2
+		ui.viewportHeight = msg.Height - verticalMarginHeight
 		if !ui.ready {
 			ui.ready = true
-			ui.viewport.HighPerformanceRendering = true
-			ui.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
-			ui.viewport.YPosition = int(lipgloss.Top)
-			ui.viewport.Style = styles.Viewport
-		} else {
-			ui.viewport.Width = msg.Width
-			ui.viewport.Height = msg.Height - verticalMarginHeight
 		}
 		ui.textInput.Width = msg.Width - lipgloss.Width(logo) - 2
-		cmds = append(cmds, viewport.Sync(ui.viewport))
 	case spinner.TickMsg:
 		ui.spinner, cmd = ui.spinner.Update(msg)
 		cmds = append(cmds, cmd)
@@ -149,21 +143,15 @@ func (ui ui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ui.viewportContent = ui.viewportContent[len(ui.viewportContent)-maxLines:]
 		}
 
-		ui.viewport.SetContent(strings.Join(ui.viewportContent, ""))
-		if !ui.scrollLock {
-			ui.viewport.GotoBottom()
-		}
-
 		cmds = append(cmds, waitForLines(ui.linesChan))
 	case listenerReadyMsg:
 		ui.addr = string(msg)
 		cmds = append(cmds, tea.Batch(
 			startServer(ui.server, ui.logger),
-			startCommand(ui.cfg, ui.manager, ui.linesChan),
+			startCommand(ui.cfg, ui.manager),
 		))
 	}
 
-	ui.viewport, cmd = ui.viewport.Update(msg)
 	ui.textInput, cmd = ui.textInput.Update(msg)
 
 	return ui, tea.Batch(append(cmds, cmd)...)
@@ -175,7 +163,23 @@ func (ui ui) View() string {
 		return "Loading..."
 	}
 
-	return fmt.Sprintf("%s\n%s\n%s", ui.viewport.View(), ui.footerView(), ui.helpView())
+	logLines := strings.Split(styles.ViewportContent.MaxWidth(ui.viewportWidth-2).Render(strings.Join(ui.viewportContent, "")), "\n")
+	logLines = logLines[max(0, len(logLines)-ui.viewportHeight):]
+
+	return fmt.Sprintf(
+		"%s\n%s",
+		styles.Viewport.
+			Width(ui.viewportWidth).
+			Height(ui.viewportHeight).
+			Render(
+				styles.ViewportContent.
+					MaxWidth(ui.viewportWidth-2).
+					Height(ui.viewportHeight).
+					MaxHeight(ui.viewportHeight).
+					Render(strings.Join(logLines, "\n")),
+			),
+		ui.footerView(),
+	)
 }
 
 func (ui ui) footerView() string {
@@ -183,28 +187,39 @@ func (ui ui) footerView() string {
 	if len(ui.addr) == 0 {
 		s = fmt.Sprintf("%s Establishing connection...", ui.spinner.View())
 	} else if !ui.editingCommand {
-		s = fmt.Sprintf("🌐 %s", ui.addr)
+		s = fmt.Sprintf("🌐 %s", styles.Link.Render(ui.addr))
 	} else {
 		s = ui.textInput.View()
 	}
-	return styles.Footer.Render(lipgloss.JoinHorizontal(
-		lipgloss.Center, styles.Logo.Render(logo), styles.FooterText.Render(s),
-	))
+	s = styles.FooterText.Render(s)
+	hv := ui.helpView()
+	l := styles.Logo.Render(logo)
+	if lipgloss.Width(l+hv) > ui.width {
+		return fmt.Sprintf(
+			"%s\n%s",
+			styles.Footer.Render(lipgloss.JoinHorizontal(lipgloss.Center, l, s)),
+			styles.Help.Padding(0, 1).Render(hv),
+		)
+	}
+	return styles.Footer.Render(
+		lipgloss.JoinHorizontal(lipgloss.Center, l,
+			lipgloss.JoinVertical(lipgloss.Top, s, hv),
+		),
+	)
 }
 
 func (ui ui) helpView() string {
 	if ui.editingCommand {
-		return styles.Help.Render(ui.help.ShortHelpView([]key.Binding{
+		return ui.help.ShortHelpView([]key.Binding{
 			ui.keymap.editingCancel,
 			ui.keymap.editingSave,
-		}))
+		})
 	} else {
-		return styles.Help.Render(ui.help.ShortHelpView([]key.Binding{
+		return ui.help.ShortHelpView([]key.Binding{
 			ui.keymap.reload,
 			ui.keymap.editCommand,
-			ui.keymap.scrollLock,
 			ui.keymap.quit,
-		}))
+		})
 	}
 }
 
@@ -247,7 +262,7 @@ func startServer(server *server.Server, logger log.Logger) tea.Cmd {
 	}
 }
 
-func startCommand(cfg *config.Config, mgr *cmd.Manager, sub chan string) tea.Cmd {
+func startCommand(cfg *config.Config, mgr *cmd.Manager) tea.Cmd {
 	return func() tea.Msg {
 		mgr.Run(cfg.ExecCommand)
 		return nil
@@ -266,4 +281,11 @@ func stopServer(s *server.Server) tea.Cmd {
 		s.Close()
 		return nil
 	}
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
