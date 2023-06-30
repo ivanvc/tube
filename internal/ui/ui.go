@@ -37,7 +37,7 @@ type ui struct {
 	addr      string
 
 	linesChan       chan string
-	logger          *log.Logger
+	logger          log.Logger
 	viewportContent []string
 	scrollLock      bool
 	editingCommand  bool
@@ -48,7 +48,7 @@ type ui struct {
 const maxLines = 1000
 
 // Returns a new UI
-func New(cfg *config.Config, logger *log.Logger, server *server.Server) *ui {
+func New(cfg *config.Config, logger log.Logger, server *server.Server) *ui {
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
 	s.Style = styles.FooterText
@@ -72,7 +72,7 @@ func (ui ui) Init() tea.Cmd {
 	return tea.Batch(
 		ui.spinner.Tick,
 		textinput.Blink,
-		listenForLogs(ui.linesChan, ui.logger.Reader),
+		listenForLogs(ui.linesChan, ui.logger.Reader()),
 		waitForLines(ui.linesChan),
 		startListener(ui.server, ui.logger),
 	)
@@ -112,7 +112,7 @@ func (ui ui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					tea.Quit,
 				)
 			case key.Matches(msg, ui.keymap.reload):
-				ui.logger.Print("Reloading")
+				ui.logger.Log().Info("Reloading command")
 				cmds = append(cmds, tea.Sequence(
 					stopCommand(ui.manager),
 					startCommand(ui.cfg, ui.manager, ui.linesChan),
@@ -226,21 +226,21 @@ func listenForLogs(sub chan string, reader *bufio.Reader) tea.Cmd {
 	}
 }
 
-func startListener(server *server.Server, logger *log.Logger) tea.Cmd {
+func startListener(server *server.Server, logger log.Logger) tea.Cmd {
 	return func() tea.Msg {
 		address, err := server.StartListener()
 		if err != nil {
-			logger.Fatal("error initializing listener", "error", err)
+			logger.Log().Fatal("error initializing listener", "error", err)
 		}
 
 		return listenerReadyMsg(address)
 	}
 }
 
-func startServer(server *server.Server, logger *log.Logger) tea.Cmd {
+func startServer(server *server.Server, logger log.Logger) tea.Cmd {
 	return func() tea.Msg {
 		if err := server.Serve(); err != nil {
-			logger.Fatal("error initializing http server", "error", err)
+			logger.Log().Fatal("error initializing http server", "error", err)
 		}
 
 		return serverTerminatedMsg{}

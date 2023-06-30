@@ -12,10 +12,10 @@ import (
 type proxy struct {
 	httputil.ReverseProxy
 	cfg    *config.Config
-	logger *log.Logger
+	logger log.Logger
 }
 
-func newProxy(cfg *config.Config, logger *log.Logger) *proxy {
+func newProxy(cfg *config.Config, logger log.Logger) *proxy {
 	p := &proxy{cfg: cfg, logger: logger}
 	p.ReverseProxy.ErrorLog = logger.GetStandardLogWithErrorLevel()
 	p.Director = p.getDirector
@@ -28,7 +28,7 @@ func (p *proxy) getDirector(req *http.Request) {
 		if len(req.URL.RawQuery) > 0 {
 			path += fmt.Sprintf("?%s", req.URL.RawQuery)
 		}
-		p.logger.Infof("%s %s", req.Method, path)
+		p.logger.Log().Infof("%s %s", req.Method, path)
 	}()
 
 	req.URL.Scheme = p.cfg.ListenScheme

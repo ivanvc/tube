@@ -10,13 +10,13 @@ import (
 
 type Server struct {
 	cfg      *config.Config
-	logger   *log.Logger
+	logger   log.Logger
 	server   *http.Server
 	listener *localtunnel.Listener
 }
 
 // Returns a new Server with the reverse proxy
-func New(cfg *config.Config, logger *log.Logger) *Server {
+func New(cfg *config.Config, logger log.Logger) *Server {
 	server := &http.Server{
 		Handler:  newProxy(cfg, logger),
 		ErrorLog: logger.GetStandardLogWithErrorLevel(),
@@ -27,7 +27,7 @@ func New(cfg *config.Config, logger *log.Logger) *Server {
 
 // Starts localtunnel listener.
 func (s *Server) StartListener() (string, error) {
-	s.logger.Infof("forwarding traffic to %s", s.cfg.ListenURL())
+	s.logger.Log().Infof("forwarding traffic to %s", s.cfg.ListenURL())
 	var err error
 	s.listener, err = localtunnel.Listen(localtunnel.Options{
 		Log:     s.logger.GetStandardLog(),
