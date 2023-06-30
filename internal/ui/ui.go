@@ -91,7 +91,7 @@ func (ui ui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch {
 			case key.Matches(msg, ui.keymap.editingSave):
 				ui.editingCommand = false
-				ui.cfg.ExecProgram = strings.Split(ui.textInput.Value(), " ")
+				ui.cfg.ExecCommand = strings.Split(ui.textInput.Value(), " ")
 				cmds = append(cmds, tea.Sequence(
 					stopCommand(ui.manager),
 					startCommand(ui.cfg, ui.manager, ui.linesChan),
@@ -119,7 +119,7 @@ func (ui ui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				))
 			case key.Matches(msg, ui.keymap.editCommand):
 				ui.editingCommand = true
-				ui.textInput.SetValue(strings.Join(ui.cfg.ExecProgram, " "))
+				ui.textInput.SetValue(strings.Join(ui.cfg.ExecCommand, " "))
 				ui.textInput.Focus()
 				return ui, tea.Batch(cmds...)
 			case key.Matches(msg, ui.keymap.scrollLock):
@@ -249,7 +249,7 @@ func startServer(server *server.Server, logger log.Logger) tea.Cmd {
 
 func startCommand(cfg *config.Config, mgr *cmd.Manager, sub chan string) tea.Cmd {
 	return func() tea.Msg {
-		mgr.Run(cfg.ExecProgram, sub)
+		mgr.Run(cfg.ExecCommand)
 		return nil
 	}
 }
