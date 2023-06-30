@@ -100,7 +100,7 @@ func (ui ui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ui.editingCommand = false
 			case msg.String() == "ctrl+c":
 				return ui, tea.Sequence(
-					tea.Batch(stopCommand(ui.manager), stopServer(ui.server)),
+					stopCommand(ui.manager),
 					tea.Quit,
 				)
 			}
@@ -108,7 +108,7 @@ func (ui ui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch {
 			case key.Matches(msg, ui.keymap.quit):
 				return ui, tea.Sequence(
-					tea.Batch(stopCommand(ui.manager), stopServer(ui.server)),
+					stopCommand(ui.manager),
 					tea.Quit,
 				)
 			case key.Matches(msg, ui.keymap.reload):
@@ -272,13 +272,6 @@ func startCommand(cfg *config.Config, mgr *cmd.Manager) tea.Cmd {
 func stopCommand(mgr *cmd.Manager) tea.Cmd {
 	return func() tea.Msg {
 		mgr.Stop()
-		return nil
-	}
-}
-
-func stopServer(s *server.Server) tea.Cmd {
-	return func() tea.Msg {
-		s.Close()
 		return nil
 	}
 }
