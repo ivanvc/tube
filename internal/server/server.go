@@ -48,3 +48,8 @@ func (s *Server) Serve() error {
 func (s *Server) Close() error {
 	return s.server.Close()
 }
+
+// Returns the listener (tunnel) addresss.
+func (s *Server) ListenerAddr() string {
+	return s.listener.Addr().String()
+}
