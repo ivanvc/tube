@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-const envVarPrefix = "LT"
+const envVarPrefix = "TUBE"
 
 // Config holds the application configuration options.
 type Config struct {
@@ -20,8 +20,8 @@ type Config struct {
 
 	ServerBaseURL string
 
-	ExecCommand []string
-	Watch       bool
+	ExecCommand     []string
+	WatchForChanges bool
 
 	StandaloneMode bool
 }
@@ -54,10 +54,10 @@ func Load() *Config {
 		"Set this option if you don't want to use the Terminal UI.",
 	)
 	loadBoolOption(
-		&c.Watch,
+		&c.WatchForChanges,
 		"watch",
-		true,
-		"Watch for changes ",
+		false,
+		"Watch for changes in the current directory, and restart command.",
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(
