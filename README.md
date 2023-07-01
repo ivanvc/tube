@@ -1,3 +1,5 @@
-# lt
+# Tube
 
-Localtunnel client
+Tube is a [Localtunnel] client.
+
+[Localtunnel]: https://localtunnel.me
