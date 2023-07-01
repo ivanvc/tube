@@ -3,6 +3,7 @@ package ui
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -12,16 +13,18 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ivanvc/tube/internal/cmd"
+	cmd "github.com/ivanvc/tube/internal/command"
 	"github.com/ivanvc/tube/internal/config"
 	"github.com/ivanvc/tube/internal/log"
 	"github.com/ivanvc/tube/internal/server"
 	"github.com/ivanvc/tube/internal/ui/styles"
 )
 
-type newLineMsg string
+type newCommandLogLineMsg string
+type newLogLineMsg string
 type listenerReadyMsg string
 type serverTerminatedMsg struct{}
+type watcherGotChangesMsg struct{}
 
 type ui struct {
 	cfg    *config.Config
@@ -37,33 +40,43 @@ type ui struct {
 	ready          bool
 	addr           string
 
-	linesChan       chan string
+	logLinesChan    chan string
+	commandLogsChan chan string
+	changesChan     chan watcherGotChangesMsg
+	commandReader   *bufio.Reader
 	logger          log.Logger
 	viewportContent []string
 	editingCommand  bool
 
 	manager *cmd.Manager
+	watcher *cmd.Watcher
 }
 
 const maxLines = 1000
 
 // Returns a new UI
-func New(cfg *config.Config, logger log.Logger, server *server.Server) *ui {
+func New(cfg *config.Config) *ui {
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
 	s.Style = styles.FooterText
+	logger := log.NewBuffered()
+	r, w := io.Pipe()
 
 	return &ui{
 		cfg:             cfg,
-		server:          server,
+		server:          server.New(cfg, logger),
 		keymap:          newKeymap(),
 		spinner:         s,
 		help:            help.New(),
-		linesChan:       make(chan string),
+		logLinesChan:    make(chan string),
+		commandLogsChan: make(chan string),
+		changesChan:     make(chan watcherGotChangesMsg),
 		logger:          logger,
 		viewportContent: make([]string, 0, maxLines),
-		manager:         cmd.New(logger),
+		manager:         cmd.NewManager(logger, w),
+		commandReader:   bufio.NewReader(r),
 		textInput:       textinput.New(),
+		watcher:         cmd.NewWatcher(cfg, logger),
 	}
 }
 
@@ -72,9 +85,12 @@ func (ui ui) Init() tea.Cmd {
 	return tea.Batch(
 		ui.spinner.Tick,
 		textinput.Blink,
-		listenForLogs(ui.linesChan, ui.logger.Reader()),
-		waitForLines(ui.linesChan),
+		listenForLogs(ui.logLinesChan, ui.logger.Reader()),
+		waitForLogLines(ui.logLinesChan),
+		listenForLogs(ui.commandLogsChan, ui.commandReader),
+		waitForCommandLogs(ui.commandLogsChan),
 		startListener(ui.server, ui.logger),
+		listenForChanges(ui.watcher),
 	)
 }
 
@@ -131,18 +147,29 @@ func (ui ui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spinner.TickMsg:
 		ui.spinner, cmd = ui.spinner.Update(msg)
 		cmds = append(cmds, cmd)
-	case newLineMsg:
-		ui.viewportContent = append(ui.viewportContent, string(msg))
-		if len(ui.viewportContent) > maxLines {
-			ui.viewportContent = ui.viewportContent[len(ui.viewportContent)-maxLines:]
-		}
-
-		cmds = append(cmds, waitForLines(ui.linesChan))
+	case newCommandLogLineMsg:
+		processLine(&ui.viewportContent, styles.CommandLogLine, string(msg))
+		cmds = append(cmds, waitForCommandLogs(ui.commandLogsChan))
+	case newLogLineMsg:
+		processLine(&ui.viewportContent, styles.LogLine, string(msg))
+		cmds = append(cmds, waitForLogLines(ui.logLinesChan))
+	case watcherGotChangesMsg:
+		ui.logger.Log().Info("Restarting")
+		cmds = append(cmds,
+			tea.Batch(
+				tea.Sequence(
+					stopCommand(ui.manager),
+					startCommand(ui.cfg, ui.manager),
+				),
+				listenForChanges(ui.watcher),
+			),
+		)
 	case listenerReadyMsg:
 		ui.addr = string(msg)
 		cmds = append(cmds, tea.Batch(
 			startServer(ui.server, ui.logger),
 			startCommand(ui.cfg, ui.manager),
+			watchForChanges(ui.watcher),
 		))
 	}
 
@@ -218,9 +245,15 @@ func (ui ui) helpView() string {
 	}
 }
 
-func waitForLines(sub chan string) tea.Cmd {
+func waitForCommandLogs(sub chan string) tea.Cmd {
 	return func() tea.Msg {
-		return newLineMsg(<-sub)
+		return newCommandLogLineMsg(<-sub)
+	}
+}
+
+func waitForLogLines(sub chan string) tea.Cmd {
+	return func() tea.Msg {
+		return newLogLineMsg(<-sub)
 	}
 }
 
@@ -271,12 +304,43 @@ func stopCommand(mgr *cmd.Manager) tea.Cmd {
 	}
 }
 
+func closeWatcher(w *cmd.Watcher) tea.Cmd {
+	return func() tea.Msg {
+		w.Close()
+		return nil
+	}
+}
+
+func listenForChanges(w *cmd.Watcher) tea.Cmd {
+	return func() tea.Msg {
+		<-w.Activity()
+		return watcherGotChangesMsg{}
+	}
+}
+
+func watchForChanges(w *cmd.Watcher) tea.Cmd {
+	return func() tea.Msg {
+		w.Run()
+		return nil
+	}
+}
+
 func quitSeq(ui ui) tea.Cmd {
 	return tea.Sequence(
 		closeWatcher(ui.watcher),
 		stopCommand(ui.manager),
 		tea.Quit,
 	)
+}
+
+func processLine(lines *[]string, style lipgloss.Style, line string) {
+	*lines = append(
+		*lines,
+		fmt.Sprintf("%s\n", style.Inline(true).Render(string(line))),
+	)
+	if len(*lines) > maxLines {
+		*lines = (*lines)[len(*lines)-maxLines:]
+	}
 }
 
 func max(a, b int) int {
