@@ -6,9 +6,13 @@ type keymap struct {
 	reload      key.Binding
 	quit        key.Binding
 	editCommand key.Binding
+	editing     editingKeymap
+}
 
-	editingSave   key.Binding
-	editingCancel key.Binding
+type editingKeymap struct {
+	save   key.Binding
+	cancel key.Binding
+	quit   key.Binding
 }
 
 func newKeymap() keymap {
@@ -19,19 +23,25 @@ func newKeymap() keymap {
 		),
 		quit: key.NewBinding(
 			key.WithKeys("ctrl+c", "esc", "q"),
-			key.WithHelp("q/esc", "quit"),
+			key.WithHelp("q/esc/ctrl+c", "quit"),
 		),
 		editCommand: key.NewBinding(
 			key.WithKeys("e"),
 			key.WithHelp("e", "edit command"),
 		),
-		editingCancel: key.NewBinding(
-			key.WithKeys("esc"),
-			key.WithHelp("esc", "cancel editing command"),
-		),
-		editingSave: key.NewBinding(
-			key.WithKeys("enter"),
-			key.WithHelp("enter", "save command, stop current and start a new process"),
-		),
+		editing: editingKeymap{
+			cancel: key.NewBinding(
+				key.WithKeys("esc"),
+				key.WithHelp("esc", "cancel editing command"),
+			),
+			save: key.NewBinding(
+				key.WithKeys("enter"),
+				key.WithHelp("enter", "save command, stop current and start a new process"),
+			),
+			quit: key.NewBinding(
+				key.WithKeys("ctrl+c"),
+				key.WithHelp("ctrl+c", "quit"),
+			),
+		},
 	}
 }

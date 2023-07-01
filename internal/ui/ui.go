@@ -89,28 +89,22 @@ func (ui ui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if ui.editingCommand {
 			switch {
-			case key.Matches(msg, ui.keymap.editingSave):
+			case key.Matches(msg, ui.keymap.editing.save):
 				ui.editingCommand = false
 				ui.cfg.ExecCommand = strings.Split(ui.textInput.Value(), " ")
 				cmds = append(cmds, tea.Sequence(
 					stopCommand(ui.manager),
 					startCommand(ui.cfg, ui.manager),
 				))
-			case key.Matches(msg, ui.keymap.editingCancel):
+			case key.Matches(msg, ui.keymap.editing.cancel):
 				ui.editingCommand = false
-			case msg.String() == "ctrl+c":
-				return ui, tea.Sequence(
-					stopCommand(ui.manager),
-					tea.Quit,
-				)
+			case key.Matches(msg, ui.keymap.editing.quit):
+				return ui, quitSeq(ui)
 			}
 		} else {
 			switch {
 			case key.Matches(msg, ui.keymap.quit):
-				return ui, tea.Sequence(
-					stopCommand(ui.manager),
-					tea.Quit,
-				)
+				return ui, quitSeq(ui)
 			case key.Matches(msg, ui.keymap.reload):
 				ui.logger.Log().Info("Reloading command")
 				cmds = append(cmds, tea.Sequence(
@@ -211,8 +205,9 @@ func (ui ui) footerView() string {
 func (ui ui) helpView() string {
 	if ui.editingCommand {
 		return ui.help.ShortHelpView([]key.Binding{
-			ui.keymap.editingCancel,
-			ui.keymap.editingSave,
+			ui.keymap.editing.save,
+			ui.keymap.editing.cancel,
+			ui.keymap.editing.quit,
 		})
 	} else {
 		return ui.help.ShortHelpView([]key.Binding{
@@ -274,6 +269,14 @@ func stopCommand(mgr *cmd.Manager) tea.Cmd {
 		mgr.Stop()
 		return nil
 	}
+}
+
+func quitSeq(ui ui) tea.Cmd {
+	return tea.Sequence(
+		closeWatcher(ui.watcher),
+		stopCommand(ui.manager),
+		tea.Quit,
+	)
 }
 
 func max(a, b int) int {
