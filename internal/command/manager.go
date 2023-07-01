@@ -1,4 +1,4 @@
-package cmd
+package command
 
 import (
 	"bufio"
@@ -14,11 +14,12 @@ import (
 type Manager struct {
 	*exec.Cmd
 	logger log.Logger
+	output io.Writer
 }
 
 // Returns a new command manager.
-func New(logger log.Logger) *Manager {
-	return &Manager{logger: logger}
+func NewManager(logger log.Logger, output io.Writer) *Manager {
+	return &Manager{logger: logger, output: output}
 }
 
 // Runs the command.
@@ -33,20 +34,17 @@ func (m *Manager) Run(command []string) error {
 
 	stdout, err := m.StdoutPipe()
 	if err != nil {
-		m.logger.Log().Error("Error piping stdout", "error", err)
 		return err
 	}
-	go pipeOutput("stdout", stdout, m.logger)
+	go pipeOutput("stdout", stdout, m.logger, m.output)
 
 	stderr, err := m.StderrPipe()
 	if err != nil {
-		m.logger.Log().Error("Error piping stderr", "error", err)
 		return err
 	}
-	go pipeOutput("stderr", stderr, m.logger)
+	go pipeOutput("stderr", stderr, m.logger, m.output)
 
 	if err := m.Cmd.Run(); err != nil {
-		m.logger.Log().Error("Error executing process", "error", err)
 		return err
 	}
 	m.logger.Log().Info("Process exited", "command", command[0])
@@ -85,7 +83,7 @@ func (m *Manager) Kill() error {
 	return nil
 }
 
-func pipeOutput(t string, r io.ReadCloser, logger log.Logger) {
+func pipeOutput(t string, r io.ReadCloser, logger log.Logger, output io.Writer) {
 	reader := bufio.NewReader(r)
 	for {
 		line, err := reader.ReadSlice('\n')
@@ -96,6 +94,6 @@ func pipeOutput(t string, r io.ReadCloser, logger log.Logger) {
 			logger.Log().Error("Error reading "+t, "error", err)
 			return
 		}
-		logger.Log().Print(string(line[:len(line)-1]))
+		output.Write(line)
 	}
 }
