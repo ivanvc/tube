@@ -6,9 +6,10 @@ import (
 	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 
-	"github.com/ivanvc/tube/internal/cmd"
+	cmd "github.com/ivanvc/tube/internal/command"
 	"github.com/ivanvc/tube/internal/config"
 	intlog "github.com/ivanvc/tube/internal/log"
 	"github.com/ivanvc/tube/internal/server"
@@ -17,6 +18,7 @@ import (
 
 func main() {
 	cfg := config.Load()
+
 	if cfg.StandaloneMode {
 		startStandalone(cfg)
 	} else {
@@ -24,20 +26,20 @@ func main() {
 	}
 }
 
-func startTUI(cfg *config.Config) {
-	logger := intlog.NewBuffered()
-	server := server.New(cfg, logger)
-
-	p := tea.NewProgram(ui.New(cfg, logger, server), tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
-		log.Fatal(err)
-	}
-}
-
 func startStandalone(cfg *config.Config) {
 	logger := intlog.NewStdout()
+	if len(cfg.ExecCommand) > 0 {
+		logger.SetPrefix("TUBE")
+		log.TimestampStyle = log.TimestampStyle.Foreground(lipgloss.Color("3"))
+		log.PrefixStyle = log.PrefixStyle.Foreground(lipgloss.Color("3"))
+		log.SeparatorStyle = log.SeparatorStyle.Foreground(lipgloss.Color("11"))
+	}
 	server := server.New(cfg, logger)
-	mgr := cmd.New(logger)
+	mgr := cmd.NewManager(logger, os.Stdout)
+	watcher := cmd.NewWatcher(cfg, logger)
+	defer mgr.Stop()
+	defer watcher.Close()
+
 	if _, err := server.StartListener(); err != nil {
 		logger.Fatal("error initializing listener", "error", err)
 	}
@@ -49,8 +51,28 @@ func startStandalone(cfg *config.Config) {
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	printTunnel := make(chan os.Signal)
+	signal.Notify(printTunnel, syscall.SIGUSR1, syscall.SIGUSR2)
 
 	go mgr.Run(cfg.ExecCommand)
-	<-done
-	mgr.Stop()
+	go watcher.Run()
+
+	for {
+		select {
+		case <-watcher.Activity():
+			mgr.Stop()
+			go mgr.Run(cfg.ExecCommand)
+		case <-printTunnel:
+			log.Infof("Tunnel available at: %s", server.ListenerAddr())
+		case <-done:
+			return
+		}
+	}
+}
+
+func startTUI(cfg *config.Config) {
+	p := tea.NewProgram(ui.New(cfg), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		log.Fatal(err)
+	}
 }
