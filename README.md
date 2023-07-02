@@ -34,7 +34,7 @@ port and command to execute can also be set from environment variables, by using
 
 ### Reload using watch
 
-If you specify either `--watch` or the environment variable `TUBE_WATCH=1`, it
+If you specify either `-watch` or the environment variable `TUBE_WATCH=1`, it
 will watch for file changes in the current working directory using `fsnotify`.
 Then, it will reload the **exec command** if specified.
 
@@ -48,7 +48,7 @@ reload with `r`.
 
 ### Standalone mode
 
-It's also possible to run in standalone mode (using `--standalone` or by setting
+It's also possible to run in standalone mode (using `-standalone` or by setting
 `TUBE_STANDALONE=1`).
 
 As the output of the executing program will be shown, if you want to see the
