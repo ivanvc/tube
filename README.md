@@ -6,7 +6,7 @@ establish a connection and expose a local port externally.
 It can spawn a command which the tunnel will use, show its output, and reload it
 on-demand, or watch for changes using [fsnotify], and automatically reload it.
 
-<intro.gi>
+<intro.gif>
 
 ## Installation
 
@@ -40,10 +40,11 @@ Then, it will reload the **exec command** if specified.
 
 ### TUI mode
 
-The default execution type has a terminal user interface. You can edit the
-command by typing `e`, and manually reload with `r`.
+The default execution type has a terminal user interface (made with the
+[Bubble Tea] framework). You can edit the command by typing `e`, and manually
+reload with `r`.
 
-<tui demo>
+<tui demo.gif>
 
 ### Standalone mode
 
@@ -57,7 +58,7 @@ tunnel's URL, you can send either the `SIGUSR1` or `SIGUSR2` to `tube` (i.e.,
 You can also manually reload the running command by sending `SIGHUP` to `tube`
 (i.e., ` pkill -HUP tube`).
 
-<standalone demo>
+<standalone demo.gif>
 
 ## License
 
@@ -67,3 +68,4 @@ See [LICENSE](LICENSE) © [Ivan Valdes](https://github.com/ivanvc/)
 [go-localtunnel]: https://github.com/localtunnel/go-localtunnel
 [releases]: https://github.com/ivanvc/tube/releases
 [fsnotify]: https://github.com/fsnotify/fsnotify
+[Bubble Tea]: https://github.com/charmbracelet/bubbletea
