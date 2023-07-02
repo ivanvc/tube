@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,8 +17,22 @@ import (
 	"github.com/ivanvc/tube/internal/ui"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	cfg := config.Load()
+	if cfg.ShowVersion {
+		fmt.Printf("tube %s (%s) %s\n", version, commit, date)
+		return
+	}
+
+	if len(cfg.ListenPort) == 0 {
+		log.Fatal("Port needs to be specified, either by the TUBE_PORT environment variable, or by the first argument to the program")
+	}
 
 	if cfg.StandaloneMode {
 		startStandalone(cfg)

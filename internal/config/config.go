@@ -6,8 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/charmbracelet/log"
 )
 
 const envVarPrefix = "TUBE"
@@ -24,6 +22,7 @@ type Config struct {
 	WatchForChanges bool
 
 	StandaloneMode bool
+	ShowVersion    bool
 }
 
 // Loads the configuration.
@@ -59,6 +58,12 @@ func Load() *Config {
 		false,
 		"Watch for changes in the current directory, and restart command.",
 	)
+	loadBoolOption(
+		&c.ShowVersion,
+		"version",
+		false,
+		"Print the version and exit.",
+	)
 	flag.Usage = func() {
 		fmt.Fprintf(
 			flag.CommandLine.Output(),
@@ -81,9 +86,6 @@ Options:
 	flag.Parse()
 
 	loadArgumentOptions(&c.ListenPort, &c.ExecCommand)
-	if len(c.ListenPort) == 0 {
-		log.Fatalf("Port needs to be specified, either by the %s environment variable, or by the first argument to the program", formatEnvVar("port"))
-	}
 	return c
 }
 
