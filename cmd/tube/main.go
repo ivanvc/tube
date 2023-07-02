@@ -53,6 +53,8 @@ func startStandalone(cfg *config.Config) {
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	printTunnel := make(chan os.Signal)
 	signal.Notify(printTunnel, syscall.SIGUSR1, syscall.SIGUSR2)
+	reload := make(chan os.Signal)
+	signal.Notify(reload, syscall.SIGHUP)
 
 	go mgr.Run(cfg.ExecCommand)
 	go watcher.Run()
@@ -60,6 +62,9 @@ func startStandalone(cfg *config.Config) {
 	for {
 		select {
 		case <-watcher.Activity():
+			mgr.Stop()
+			go mgr.Run(cfg.ExecCommand)
+		case <-reload:
 			mgr.Stop()
 			go mgr.Run(cfg.ExecCommand)
 		case <-printTunnel:
