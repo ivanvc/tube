@@ -17,7 +17,7 @@ Enter
 Show
 
 Type "tube 8080 python -m http.server 8080"
-Sleep 500ms
+Sleep 1s
 Enter
 
 Sleep 10s
