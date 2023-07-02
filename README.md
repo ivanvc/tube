@@ -1,4 +1,4 @@
-# Tube
+# ![tube](http://ivan.vc/tube/images/logo.png "tube")
 
 Tube is a [Localtunnel] client. It uses the [go-localtunnel] client library to
 establish a connection and expose a local port externally.
@@ -6,7 +6,7 @@ establish a connection and expose a local port externally.
 It can spawn a command which the tunnel will use, show its output, and reload it
 on-demand, or watch for changes using [fsnotify], and automatically reload it.
 
-<intro.gif>
+![intro](http://ivan.vc/tube/images/intro.gif)
 
 ## Installation
 
