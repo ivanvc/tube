@@ -13,7 +13,7 @@ on-demand, or watch for changes using [fsnotify], and automatically reload it.
 Download the binary from the [releases] page. Or run
 
 ```bash
-go install github.com/ivanvc/tube@latest
+go install github.com/ivanvc/tube/cmd/tube@latest
 ```
 
 ## Usage
