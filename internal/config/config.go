@@ -71,7 +71,7 @@ func Load() *Config {
 
 Starts a localtunnel.me tunnel on the  specified port. You can specify the
 options by argument  flags,  or  by  setting an environment variable, i.e.
-TUBE_HOST or --host. Arguments take precedence over environment variables.
+TUBE_HOST or  -host. Arguments take precedence over environment variables.
 
 The port can be either specified  as the first argument  or  the TUBE_PORT
 environment variable.
