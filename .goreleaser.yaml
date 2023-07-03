@@ -4,7 +4,7 @@ before:
     - go generate ./...
 builds:
   - main: ./cmd/tube/
-  - env:
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
