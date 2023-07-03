@@ -59,6 +59,8 @@ func New(cfg *config.Config) *ui {
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
 	s.Style = styles.FooterText
+	ti := textinput.New()
+	ti.Placeholder = "Command to execute"
 	logger := log.NewBuffered()
 	r, w := io.Pipe()
 
@@ -75,7 +77,7 @@ func New(cfg *config.Config) *ui {
 		viewportContent: make([]string, 0, maxLines),
 		manager:         cmd.NewManager(logger, w),
 		commandReader:   bufio.NewReader(r),
-		textInput:       textinput.New(),
+		textInput:       ti,
 		watcher:         cmd.NewWatcher(cfg, logger),
 	}
 }
