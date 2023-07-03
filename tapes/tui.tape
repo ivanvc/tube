@@ -1,4 +1,4 @@
-Output images/intro.gif
+Output images/tui.gif
 Set Width 1400
 Set Height 600
 Set Theme "Dracula"
@@ -14,13 +14,24 @@ Type "go build -o bin/tube cmd/tube/main.go"
 Enter
 Type "clear"
 Enter
-Show
 
-Type "tube 8080 python -m http.server 8080"
+Show
+Type "tube 8080"
 Sleep 1s
 Enter
 
-Sleep 10s
+Sleep 3s
+
+Type "e"
+Sleep 2s
+Type@125ms "python -m http.server 8080"
+Enter
+
+Sleep 3s
+
+Type "r"
+
+Sleep 3s
 
 Hide
 Type "q"

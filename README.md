@@ -38,13 +38,15 @@ If you specify either `-watch` or the environment variable `TUBE_WATCH=1`, it
 will watch for file changes in the current working directory using `fsnotify`.
 Then, it will reload the **exec command** if specified.
 
+![reload](http://ivan.vc/tube/images/reload.gif)
+
 ### TUI mode
 
 The default execution type has a terminal user interface (made with the
 [Bubble Tea] framework). You can edit the command by typing `e`, and manually
 reload with `r`.
 
-<tui demo.gif>
+![tui](http://ivan.vc/tube/images/tui.gif)
 
 ### Standalone mode
 
@@ -58,7 +60,7 @@ tunnel's URL, you can send either the `SIGUSR1` or `SIGUSR2` to `tube` (i.e.,
 You can also manually reload the running command by sending `SIGHUP` to `tube`
 (i.e., ` pkill -HUP tube`).
 
-<standalone demo.gif>
+![standalone](http://ivan.vc/tube/images/standalone.gif)
 
 ## License
 
